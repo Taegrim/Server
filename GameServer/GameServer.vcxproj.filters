@@ -7,19 +7,27 @@
     <Filter Include="Utils">
       <UniqueIdentifier>{de23fcb5-f43a-4fd5-98c2-5d0ea1111b30}</UniqueIdentifier>
     </Filter>
+    <Filter Include="SaveFile">
+      <UniqueIdentifier>{b1cb623d-61ab-480a-87c5-c307e04185f0}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
       <Filter>Utils</Filter>
     </ClCompile>
-    <ClCompile Include="thread_test.cpp" />
     <ClCompile Include="GameServer.cpp">
       <Filter>Main</Filter>
+    </ClCompile>
+    <ClCompile Include="save.cpp">
+      <Filter>SaveFile</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
       <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="save.h">
+      <Filter>SaveFile</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
