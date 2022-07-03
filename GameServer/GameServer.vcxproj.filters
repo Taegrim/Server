@@ -9,11 +9,12 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="GameServer.cpp">
-      <Filter>Main</Filter>
-    </ClCompile>
     <ClCompile Include="pch.cpp">
       <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="thread_test.cpp" />
+    <ClCompile Include="GameServer.cpp">
+      <Filter>Main</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
