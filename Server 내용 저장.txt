@@ -359,3 +359,146 @@ int main()
 
 	save("GameServer.cpp");
 }
+﻿// ------------------------------------------------------------------------------------------------------------------------
+// Spin Lock - Lock의 구현 이론
+// 
+#include "pch.h"
+#include <iostream>
+#include "CorePch.h"
+#include <thread>
+#include <atomic>
+#include <mutex>
+#include "save.h"
+
+// 이 SpinLock 클래스는 Lock이 되어있는지를 확인하는 부분과 Lock을 거는 부분이 분리되어 있기 때문에
+// 두개 이상의 쓰레드가 동시에 사용을 하면 서로 Lock을 걸 수 있다는 문제가 있음
+class SpinLock 
+{
+public:
+	void lock() {
+		// volatile 을 사용하지 않으면 컴파일러는
+		// while 문의 조건이 true이므로 매번마다 while문의 조건을 체크하지 않음
+		while (locked) {
+
+		}
+		locked = true;
+	}
+
+	void unlock() {
+		locked = false;
+	}
+
+private:
+	volatile bool locked = false;
+	// volatile 은 컴파일러에게 최적화 하지 않도록 명시하는 것
+};
+
+int32 sum = 0;
+mutex m;
+SpinLock spinLock;
+
+void Add()
+{
+	for (int32 i = 0; i < 10'0000; ++i) {
+		lock_guard<SpinLock>guard(spinLock);
+		sum++;
+	}
+}
+
+void Sub()
+{
+	for (int32 i = 0; i < 10'0000; ++i) {
+		lock_guard<SpinLock>guard(spinLock);
+		sum--;
+	}
+}
+
+int main()
+{
+	thread t1(Add);
+	thread t2(Sub);
+
+	t1.join();
+	t2.join();
+
+	cout << sum << endl;
+
+	save("GameServer.cpp");
+}
+﻿// ------------------------------------------------------------------------------------------------------------------------
+// Spin Lock - Lock의 구현 이론
+// 
+#include "pch.h"
+#include <iostream>
+#include "CorePch.h"
+#include <thread>
+#include <atomic>
+#include <mutex>
+#include "save.h"
+
+// SpinLock 은 두 쓰레드가 경합이 발생하면 한쓰레드는 무한히 while문을 체크함
+// 따라서 다른 쓰레드가 금방 unlock을 하지 않는다면 CPU점유율이 높아진다(CPU의 낭비)는 단점이 있음
+class SpinLock 
+{
+public:
+	void lock() {
+		// CAS (Compare-And-Swap) 
+		bool expected = false;
+		bool desired = true;
+
+		// CAS 의사코드 - 아래 코드를 한번에 실행하는 것
+		/*if (locked == expected) {
+			expected = locked;
+			locked = desired;
+			return true;
+		}
+		else {
+			expected = locked;
+			return false;
+		}*/
+
+		while (!locked.compare_exchange_strong(expected, desired)) {
+			expected = false;
+		}
+		locked = true;
+	}
+
+	void unlock() {
+		locked.store(false);
+	}
+
+private:
+	atomic<bool> locked = false;
+};
+
+int32 sum = 0;
+SpinLock spinLock;
+
+void Add()
+{
+	for (int32 i = 0; i < 10'0000; ++i) {
+		lock_guard<SpinLock>guard(spinLock);
+		sum++;
+	}
+}
+
+void Sub()
+{
+	for (int32 i = 0; i < 10'0000; ++i) {
+		lock_guard<SpinLock>guard(spinLock);
+		sum--;
+	}
+}
+
+int main()
+{
+	thread t1(Add);
+	thread t2(Sub);
+
+	t1.join();
+	t2.join();
+
+	cout << sum << endl;
+
+	save("GameServer.cpp");
+}
