@@ -1,5 +1,5 @@
 ﻿// ------------------------------------------------------------------------------------------------------------------------
-// Spin Lock - Lock의 구현 이론
+// Sleep - Lock의 구현 이론
 // 
 #include "pch.h"
 #include <iostream>
@@ -13,12 +13,16 @@ class SpinLock
 {
 public:
 	void lock() {
-		// CAS (Compare-And-Swap) 
 		bool expected = false;
 		bool desired = true;
 
-		while (!locked.compare_exchange_strong(expected, desired))
+		while (!locked.compare_exchange_strong(expected, desired)) {
 			expected = false;
+			//this_thread::sleep_for(std::chrono::milliseconds(100));
+			this_thread::sleep_for(0ms);
+			//this_thread::yield();
+			// yield 는 다른 프로그램에 time slice를 넘기는 함수
+		}
 	}
 
 	void unlock() {
