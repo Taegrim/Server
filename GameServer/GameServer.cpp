@@ -1,5 +1,5 @@
 ﻿// ------------------------------------------------------------------------------------------------------------------------
-// Sleep - Lock의 구현 이론
+// Event - Lock의 구현 이론
 // 
 #include "pch.h"
 #include <iostream>
@@ -8,59 +8,60 @@
 #include <atomic>
 #include <mutex>
 #include "save.h"
+#include <windows.h>
 
-class SpinLock 
+mutex m;
+queue<int32> q;
+HANDLE handle;
+
+void Producer()
 {
-public:
-	void lock() {
-		bool expected = false;
-		bool desired = true;
-
-		while (!locked.compare_exchange_strong(expected, desired)) {
-			expected = false;
-			//this_thread::sleep_for(std::chrono::milliseconds(100));
-			this_thread::sleep_for(0ms);
-			//this_thread::yield();
-			// yield 는 다른 프로그램에 time slice를 넘기는 함수
+	while (true) {
+		{
+			unique_lock<mutex> lock(m);
+			q.push(100);
 		}
-	}
 
-	void unlock() {
-		locked.store(false);
-	}
-
-private:
-	atomic<bool> locked = false;
-};
-
-int32 sum = 0;
-SpinLock spinLock;
-
-void Add()
-{
-	for (int32 i = 0; i < 10'0000; ++i) {
-		lock_guard<SpinLock>guard(spinLock);
-		sum++;
+		::SetEvent(handle);
+		// 이벤트의 상태를 Signal로 바꿈
+		this_thread::sleep_for(100ms);
 	}
 }
 
-void Sub()
+void Consumer()
 {
-	for (int32 i = 0; i < 10'0000; ++i) {
-		lock_guard<SpinLock>guard(spinLock);
-		sum--;
+	while (true) {
+		::WaitForSingleObject(handle, INFINITE);
+		// handle 에 해당하는 이벤트가 발생할 때까지 INFINITE 만큼 대기함
+		// Event을 Auto로 해두었기 때문에 Non-Signal 로 자동으로 변경함
+		// ::ResetEvent(handle);
+
+		unique_lock<mutex> lock(m);
+		if (!q.empty()) {
+			int32 data = q.front();
+			q.pop();
+			cout << data << endl;
+		}
 	}
 }
 
 int main()
 {
-	thread t1(Add);
-	thread t2(Sub);
+
+	// 커널 오브젝트
+	// Usage Count
+	// Signal / Non-Signal (켜짐/꺼짐) - bool
+	// Auto / Manual - bool
+	// 보안속성, 수동(true)/자동(flase) 리셋, 초기상태, 이름
+	handle = ::CreateEvent(NULL, false, false, NULL);
+
+	thread t1(Producer);
+	thread t2(Consumer);
 
 	t1.join();
 	t2.join();
 
-	cout << sum << endl;
+	::CloseHandle(handle);
 
 	//save("GameServer.cpp");
 }
