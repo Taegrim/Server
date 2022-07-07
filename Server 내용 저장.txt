@@ -635,3 +635,213 @@ int main()
 	::CloseHandle(handle);
 
 }
+﻿// ------------------------------------------------------------------------------------------------------------------------
+// Condition Variable - 쓰레드의 대기와 호출
+// 실제 사용 사례 - 클라이언트에서 패킷을 보내면 서버에선 패킷이 있을때에만
+// 확인하고 패킷을 꺼내 사용하는 방식으로 이용할 수 있다
+#include "pch.h"
+#include <iostream>
+#include "CorePch.h"
+#include <thread>
+#include <atomic>
+#include <mutex>
+#include "save.h"
+
+mutex m;
+queue<int32> q;
+condition_variable cv;
+// condition_variable 은 User-Level Object (커널 오브젝트X)
+// 커널 오브젝트이므로 다른 프로그램들과 동기화 할 수 없음
+
+void Producer()
+{
+	while (true) {
+		// 1) Lock 잡기
+		// 2) 공유 변수 값 수정
+		// 3) Lock 해제
+		// 4) 조건변수 통해 다른 쓰레드에게 통지
+
+		{
+			unique_lock<mutex> lock(m);
+			q.push(100);
+		}
+		// 지역변수를 통해 lock을 걸고 값을 수정했으면 빠져나올 때 lock을 해제하기 위해
+		// while문에서 지역변수를 설정함
+
+		cv.notify_one();	// wait중인 쓰레드가 있으면 해당하는 1개의 쓰레드를 깨움
+		// notify_all 은 모든 쓰레드에게 통지
+		
+		// 락을 풀어준 뒤 다른 쓰레드에 통지하는 것이 일반적임
+	}
+}
+
+void Consumer()
+{
+	while (true) {
+		unique_lock<mutex> lock(m);
+		cv.wait(lock, []() { return !q.empty(); });
+		// 1) Lock 잡기
+		// 2) 조건 확인
+		//    만족O -> 빠져나와서 코드 진행
+		//    만족X -> Lock을 풀어주고 대기 상태로 전환
+
+		// notify_one을 했으면 항상 조건식을 만족하는 것이 아닌가?
+		// Squrious WakeUp 문제
+		// 생산부분에서 Lock을 잡고 풀어주는 것과 notify_one 호출은 분리되었기 떄문에
+		// 이 사이에 데이터의 변경이 발생할 수 있기 때문에 cv.wait 에서 조건을 확인한다
+		// -> notify_one 할때 lock을 잡아주는 것이 아니기 떄문
+		
+		int32 data = q.front();
+		q.pop();
+		cout << q.size() << endl;
+	}
+}
+
+int main()
+{
+	save("GameServer.cpp");
+
+	thread t1(Producer);
+	thread t2(Consumer);
+
+	t1.join();
+	t2.join();
+}
+﻿// ------------------------------------------------------------------------------------------------------------------------
+// Future
+// 단발성 이벤트 호출
+#include "pch.h"
+#include <iostream>
+#include "CorePch.h"
+#include <thread>
+#include <atomic>
+#include <mutex>
+#include <future>
+#include "save.h"
+
+int64 Caculate()
+{
+	int64 sum = 0;
+
+	for (int32 i = 0; i < 100'000; ++i)
+		sum += i;
+
+	return sum;
+}
+
+int main()
+{
+	// 동기(synchronous) 실행
+	/*int64 sum = Caculate();
+	cout << sum << endl;*/
+
+	{
+		// async 의 첫번째 인자
+		// 1) deferred -> lazy evaluation 지연실행 (멀티 쓰레드는 아님)
+		// 2) async -> 별도의 쓰레드를 만들어 실행
+		//             쓰레드를 직접 생성하는 것보다 간편함
+		// 3) deferred | async -> 둘 중 알아서 선택
+
+		std::future<int64> future = std::async(std::launch::async, Caculate);
+		// 클라이언트가 서버로 요청을 보내도 서버가 다른일을 하느라 바쁜 경우
+		// 지연실행을 할 수 있음
+
+		int64 sum = future.get(); // 결과물이 필요할 때 get으로 호출
+								  // 결과물이 나올때까지 잠시 기다렸다가 결과물을 가져온다
+		cout << sum << endl;
+
+		class Knight {
+		public:
+			int64 GetHp() { return 100; }
+		};
+
+		Knight knight;
+		std::future<int64> future2 = std::async(std::launch::async, &Knight::GetHp, knight);	// knight.GetHp();
+	}
+
+	save("GameServer.cpp");
+}
+﻿// ------------------------------------------------------------------------------------------------------------------------
+// Future
+// mutex, condition_variable 까지 가지 않고 단순한 작업을 처리할 수 있음
+// 일회성 이벤트에 유용함
+#include "pch.h"
+#include <iostream>
+#include "CorePch.h"
+#include <thread>
+#include <atomic>
+#include <mutex>
+#include <future>
+#include "save.h"
+
+int64 Caculate()
+{
+	int64 sum = 0;
+
+	for (int32 i = 0; i < 100'000; ++i)
+		sum += i;
+
+	return sum;
+}
+
+void PromiseWorker(std::promise<string>&& promise)
+{
+	promise.set_value("Secret Message");
+}
+
+void TaskWorker(std::packaged_task<int64(void)>&& task)
+{
+	task();
+}
+
+int main()
+{
+	// std::future
+	{
+		std::future<int64> future = std::async(std::launch::async, Caculate);
+		// Caculate를 위한 전용 쓰레드를 만듦
+
+		int64 sum = future.get();
+		cout << sum << endl;
+	}
+
+	// std::promise  (future를 세팅할 수 있는 객체)
+	{
+		// 미래(std::future)에 결과물을 반환해줄거라 약속(std::promise) 하는 것
+		std::promise<string> promise;
+		std::future<string> future = promise.get_future();
+		// future 추출 
+
+		thread t(PromiseWorker, std::move(promise));
+		// future는 main쓰레드, promise는 Worker쓰레드가 소유함
+
+		string message = future.get();
+		cout << message << endl;
+		// 데이터 추출 시 future 는 empty 상태가 됨 -> 한번만 호출할 수 있음
+
+		t.join();
+	}
+
+	// std::packaged_task
+	{
+		std::packaged_task<int64(void)> task(Caculate);
+		std::future<int64> future = task.get_future();
+
+		std::thread t(TaskWorker, std::move(task));
+		// 이미 존재하고 있는 쓰레드에 일감을 떠넘겨 주는 것(여러개 넘길 수 있음)
+
+		int64 sum = future.get();
+		cout << sum << endl;
+		
+		t.join();
+	}
+
+	// 1) async
+	// 원하는 함수를 비동기적으로 실행
+	// 2) promise
+	// 결과물을 promise를 통해 future로 받아줌
+	// 3) packkaged_task
+	// 원하는 함수의 실행 결과를 packaged_task를 통해 future로 받아줌
+
+	save("GameServer.cpp");
+}
