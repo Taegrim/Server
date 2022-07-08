@@ -1,84 +1,71 @@
 ﻿// ------------------------------------------------------------------------------------------------------------------------
-// Future
-// mutex, condition_variable 까지 가지 않고 단순한 작업을 처리할 수 있음
-// 일회성 이벤트에 유용함
+// CPU 파이프라인
 #include "pch.h"
 #include <iostream>
 #include "CorePch.h"
 #include <thread>
 #include <atomic>
 #include <mutex>
-#include <future>
 #include "save.h"
 
-int64 Caculate()
+// 가시성, 코드 재배치
+int32 x = 0;
+int32 y = 0;
+int32 r1 = 0;
+int32 r2 = 0;
+
+volatile bool ready;
+
+void Thread_1()
 {
-	int64 sum = 0;
+	while (!ready)
+		;
 
-	for (int32 i = 0; i < 100'000; ++i)
-		sum += i;
-
-	return sum;
+	y = 1;	// Store y
+	r1 = x;	// Load x
 }
 
-void PromiseWorker(std::promise<string>&& promise)
+void Thread_2()
 {
-	promise.set_value("Secret Message");
-}
+	while (!ready)
+		;
 
-void TaskWorker(std::packaged_task<int64(void)>&& task)
-{
-	task();
+	x = 1;	// Store x
+	r2 = y;	// Load y
 }
 
 int main()
 {
-	// std::future
-	{
-		std::future<int64> future = std::async(std::launch::async, Caculate);
-		// Caculate를 위한 전용 쓰레드를 만듦
+	int32 count = 0;
 
-		int64 sum = future.get();
-		cout << sum << endl;
+	while (true) {
+		ready = false;
+		count++;
+
+		x = y = r1 = r2 = 0;
+
+		thread t1(Thread_1);
+		thread t2(Thread_2);
+
+		ready = true;
+
+		t1.join();
+		t2.join();
+
+		if (r1 == 0 && r2 == 0)
+			break;
 	}
 
-	// std::promise  (future를 세팅할 수 있는 객체)
-	{
-		// 미래(std::future)에 결과물을 반환해줄거라 약속(std::promise) 하는 것
-		std::promise<string> promise;
-		std::future<string> future = promise.get_future();
-		// future 추출 
+	cout << count << " 번만에 빠져나옴 " << endl;
 
-		thread t(PromiseWorker, std::move(promise));
-		// future는 main쓰레드, promise는 Worker쓰레드가 소유함
+	// 가시성 문제
+	// 멀티 쓰레드에선 코어마다 고유의 캐시를 가지고 있음
+	// 따라서 공유 데이터를 사용할 때 그 값이 각각의 캐시에 저장될 수 있고 사용되기 때문에
+	// 한 쓰레드가 공유 데이터의 값을 변경하여도 다른 쓰레드에서 캐시에 저장된 변경전의 데이터를 사용할 수 있다
 
-		string message = future.get();
-		cout << message << endl;
-		// 데이터 추출 시 future 는 empty 상태가 됨 -> 한번만 호출할 수 있음
-
-		t.join();
-	}
-
-	// std::packaged_task
-	{
-		std::packaged_task<int64(void)> task(Caculate);
-		std::future<int64> future = task.get_future();
-
-		std::thread t(TaskWorker, std::move(task));
-		// 이미 존재하고 있는 쓰레드에 일감을 떠넘겨 주는 것(여러개 넘길 수 있음)
-
-		int64 sum = future.get();
-		cout << sum << endl;
-		
-		t.join();
-	}
-
-	// 1) async
-	// 원하는 함수를 비동기적으로 실행
-	// 2) promise
-	// 결과물을 promise를 통해 future로 받아줌
-	// 3) packkaged_task
-	// 원하는 함수의 실행 결과를 packaged_task를 통해 future로 받아줌
+	// 코드 재배치
+	// 컴파일러/CPU 는 판단하에 작성한 코드의 위치를 수정할 수 있음
+	// -> 단일 쓰레드에서 로직의 결과물이 같다는 보장이 있으면 재배치를 함
 
 	//save("GameServer.cpp");
 }
