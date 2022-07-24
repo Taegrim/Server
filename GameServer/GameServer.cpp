@@ -1,42 +1,54 @@
 ﻿// ------------------------------------------------------------------------------------------------------------------------
-// Thread Local Storage 
+// Lock-Based Stack / Queue
 #include "pch.h"
 #include <iostream>
 #include "CorePch.h"
-#include <thread>
 #include <atomic>
 #include <mutex>
+#include <windows.h>
+#include <future>
+#include "ConcurrentQueue.h"
+#include "ConcurrentStack.h"
 #include "save.h"
 
+LockQueue<int32> q;
+LockStack<int32> s;
 
-thread_local int32 Threadid = 0;
-
-void ThreadMain(int32 threadid)
+void Push()
 {
-	Threadid = threadid;
+	while (true) {
+		int32 value = rand() % 100 + 1;
+		q.Push(value);
 
-	while (true){
-		cout << "Hi I am Thread" << Threadid << endl;
-		this_thread::sleep_for(1s);
+		this_thread::sleep_for(10ms);
+	}
+}
+
+void Pop()
+{
+	while (true) {
+		int32 data = 0;
+		//if(q.TryPop(OUT data))
+		//	cout << data << endl;
+
+		q.WaitPop(OUT data);
+		cout << data << endl;
 	}
 }
 
 int main()
 {
-	vector<thread> threads;
+	save("GameServer.cpp");
 
-	for (int i = 0; i < 10; ++i) 
-		threads.push_back(thread(ThreadMain, i + 1));
+	thread t1(Push);
+	thread t2(Pop);
+	thread t3(Pop);
+
+	t1.join();
+	t2.join();
+
+	// Stack, Queue에 자체적으로 lock을 구현하면 DeadLock 문제가 발생할 확률이 적어짐
+	//  -> 따로 Lock을 잡고 풀 필요없이 Stack/Queue 에서 처리하기 때문에
+
 	
-	for (thread& t : threads)
-		t.join();
-		
-
-	// Heap, 데이터 영역에 있는 정보를 가져와서 쓰레드마다 각각 가지고 있는 
-	// 쓰레드별 고유의 지역 공간(TLS)에 저장함
-	// 스택은 전역 데이터를 담기에는 불안정하므로 TLS에 가져와서 처리
-	// TLS에 정보를 가져오면 Heap, 데이터 영역에 접근하지 않아도 되므로 쓰레드 경합이 적게 발생함 
-	// 쓰레드 별로 고유의 공간이므로 데이터의 변화가 있어도 TLS의 값은 변하지 않음
-
-	//save("GameServer.cpp");
 }
