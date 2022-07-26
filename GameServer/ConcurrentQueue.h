@@ -1,3 +1,6 @@
+//-----------------------------------------------------------------------------
+// ConcurrentStack
+
 #pragma once
 
 #include <mutex>
@@ -40,4 +43,3 @@ private:
 	mutex _mutex;
 	condition_variable _condVar;
 };
-

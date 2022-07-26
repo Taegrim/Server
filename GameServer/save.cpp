@@ -9,11 +9,8 @@ void save(std::string_view filename)
 	std::ifstream in{ filename.data() };
 	std::ofstream out{ ".\\..\\..\\Server 내용 저장.txt", std::ios::app };
 
-	char c;
-	in >> std::noskipws;
+	std::vector<char> v{ std::istreambuf_iterator<char>{in}, {} };
 
-	while (in >> c)
-		out << c;
-
+	copy(v.begin(), v.end(), std::ostream_iterator<char>{out});
 	out << std::endl;
 }

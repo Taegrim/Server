@@ -1,5 +1,5 @@
-﻿// ------------------------------------------------------------------------------------------------------------------------
-// Lock-Based Stack / Queue
+﻿//------------------------------------------------------------------------------------------------------------------------
+// Lock Free Stack / Queue
 #include "pch.h"
 #include <iostream>
 #include "CorePch.h"
@@ -12,13 +12,13 @@
 #include "save.h"
 
 LockQueue<int32> q;
-LockStack<int32> s;
+LockFreeStack<int32> s;
 
 void Push()
 {
 	while (true) {
 		int32 value = rand() % 100 + 1;
-		q.Push(value);
+		s.Push(value);
 
 		this_thread::sleep_for(10ms);
 	}
@@ -28,17 +28,16 @@ void Pop()
 {
 	while (true) {
 		int32 data = 0;
-		//if(q.TryPop(OUT data))
-		//	cout << data << endl;
+		if(s.TryPop(OUT data))
+			cout << data << endl;
 
-		q.WaitPop(OUT data);
-		cout << data << endl;
 	}
 }
 
 int main()
 {
-	save("GameServer.cpp");
+	 //save("GameServer.cpp");
+	 //save("ConcurrentStack.h");
 
 	thread t1(Push);
 	thread t2(Pop);
@@ -47,8 +46,4 @@ int main()
 	t1.join();
 	t2.join();
 
-	// Stack, Queue에 자체적으로 lock을 구현하면 DeadLock 문제가 발생할 확률이 적어짐
-	//  -> 따로 Lock을 잡고 풀 필요없이 Stack/Queue 에서 처리하기 때문에
-
-	
 }
